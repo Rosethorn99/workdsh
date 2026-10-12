@@ -84,6 +84,8 @@ archive/restore 通过相同授权、修订冲突、幂等和审计服务撤回�
 
 
 
+workflow.yaml v5 新增 branch.condition（literal/file、input、七种明确比较 operator、match、caseSensitive）与 task.component（agent/read-file/write-file）。旧 Schema 拒绝这些字段。条件仍由原工作流调度器推进，不执行脚本或表达式；文件内容读取限定授权 cwd、至多 1 MiB UTF-8 文本、拒绝链接并记录 SHA-256 回执。读取与写入组件是官方 Agent 的任务配方，不是 Langflow Python 执行器。节点、属性栏及 YAML 共用草稿；注释与视口仅写 layout.json，整组移动或删除原子保存且支持撤销。Langflow 的可分离源码与布局参考固定版本、保留原文及 MIT 许可；完整子流程、RAG 和 Playground 不由本适配宣称支持。
+
 ## 项目内工作流与阶段 Agent Teams
 
 workflow.yaml v3 在阶段 execution.team 中声明 Lead 的精确专家修订和目标、1–8 位成员的唯一 key、专家修订、角色、任务、附加 Skill 修订和连接器范围，以及 parallel/sequential 策略。stage executor 仍需绑定一个已发布专家团；自定义 Lead 和成员引用均必须可授权解析，成员不能嵌套专家团。成员连接器只可缩小阶段范围，不提升权限。v1/v2 不接受 team 字段，避免旧解释器静默忽略分工。可视化配置和在线 YAML 修改共享同一草稿；发布冻结所有角色的组合摘要及技能引用。旧运行不会读取新草稿。

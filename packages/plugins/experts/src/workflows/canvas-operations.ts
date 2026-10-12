@@ -86,9 +86,10 @@ export function editCanvas(text: string, operation: CanvasOperation) {
       if(n.outputs)n.outputs=n.outputs.map(p=>paths.get(p)!);
       if(n.inputs)n.inputs=n.inputs.map(p=>paths.get(p)??p);
       if(n.file)n.file=paths.get(n.file)??n.file;
+       if(n.condition?.source==='file')n.condition.input=paths.get(n.condition.input)??n.condition.input;
       for(const port of ['next','whenTrue','whenFalse'] as const) { const target=n[port]; if(target && operation.copies[target]) n[port]=operation.copies[target]; else delete n[port]; }
       const copy=ast.get(source.id).clone();
-      for(const key of ['id','name','inputs','outputs','file','next','whenTrue','whenFalse']) if((n as any)[key]===undefined)copy.delete(key);else copy.set(key,(n as any)[key]);
+       for(const key of ['id','name','inputs','outputs','file','condition','next','whenTrue','whenFalse']) if((n as any)[key]===undefined)copy.delete(key);else copy.set(key,(n as any)[key]);
       nodes.push(n);ast.set(id,copy);selected.push(id);
     }
   }
@@ -106,7 +107,7 @@ export function horizontalLayout(manifest: Pick<WorkflowManifest,'stages'|'start
   for(const n of nodes)if(!order.includes(n.id))order.push(n.id);
   const groups=new Map<number,string[]>();for(const id of order){const d=level.get(id)??0;groups.set(d,[...(groups.get(d)??[]),id]);}
   const positions:Record<string,{x:number;y:number}>={[entryNodeId]:{x:24,y:200}};
-  for(const [d,ids]of groups)for(const [i,id]of ids.entries())positions[id]={x:360+d*384,y:200+(i-(ids.length-1)/2)*280};
+  for(const [d,ids]of groups)for(const [i,id]of ids.entries())positions[id]={x:360+d*384,y:200+(i-(ids.length-1)/2)*600};
   if(manifest.start&&positions[manifest.start])positions[entryNodeId].y=positions[manifest.start].y+22;
   return positions;
 }
@@ -124,7 +125,7 @@ export function defaultCanvasLayout(manifest: Pick<WorkflowManifest,'stages'|'st
     seen.add(next);order.push(next);next=n.next;
   }
   if(seen.size!==stages.length)return horizontalLayout(manifest);
-  return Object.fromEntries(order.map((id,i)=>[id,{x:32+(i%4)*336,y:32+Math.floor(i/4)*232}]));
+  return Object.fromEntries(order.map((id,i)=>[id,{x:32+(i%4)*336,y:32+Math.floor(i/4)*600}]));
 }
 
 export function canvasProblems(manifest: WorkflowManifest) {

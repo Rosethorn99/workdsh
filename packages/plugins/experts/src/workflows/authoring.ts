@@ -1,6 +1,7 @@
 import { parseDocument, stringify } from 'yaml';
 import type { WorkflowDefinition } from './catalog.js';
 import type { ExpertRevisionRef, SkillRevisionRef, ModelSelectionRequest } from 'workdsh-contracts';
+import { validateCondition } from './conditions.js';
 
 export interface StageTeamRole {
   key: string; expert: ExpertRevisionRef; role: string; task: string;
@@ -36,7 +37,7 @@ export interface CapabilityCatalog {
 
 export interface WorkflowFile { encoding: 'utf8' | 'base64'; content: string }
 export interface WorkflowManifest {
-  format: 'workdsh-workflow'; version: 1 | 2 | 3 | 4;
+  format: 'workdsh-workflow'; version: 1 | 2 | 3 | 4 | 5;
   name: string; description: string; mode: 'compatible' | 'staged';
   sourceId: string; entry: 'preset/agent.cordis.yml';
   runtimeOverrides?: Record<string, string>;
@@ -44,11 +45,18 @@ export interface WorkflowManifest {
   execution?: StageExecution;
 }
 export interface AppGenGate { kind: 'app-gen'; step: number; context: string }
+export interface WorkflowCondition {
+  source: 'literal' | 'file'; input: string;
+  operator: 'equals' | 'notEquals' | 'contains' | 'startsWith' | 'endsWith' | 'greaterThan' | 'lessThan';
+  match: string; caseSensitive: boolean;
+}
 export interface WorkflowStage {
   id: string; name: string; kind: 'task' | 'approval' | 'check' | 'branch' | 'end';
   prompt?: string; inputs?: string[]; outputs?: string[]; next?: string; file?: string; whenTrue?: string; whenFalse?: string;
   execution?: StageExecution;
   gate?: AppGenGate;
+  condition?: WorkflowCondition;
+  component?: 'agent' | 'read-file' | 'write-file';
 }
 export interface WorkflowRun {
   id: string; workflowId: string; revisionId: string; revision: string; workspaceId: string; projectId?: string;
@@ -89,7 +97,7 @@ export function readManifest(files: Record<string, WorkflowFile>): WorkflowManif
   const doc = parseDocument(text.content);
   if (doc.errors.length) throw new Error(doc.errors[0].message);
   const value = doc.toJS({ maxAliasCount: 0 });
-  if (!value || value.format !== 'workdsh-workflow' || ![1, 2, 3, 4].includes(value.version) || value.entry !== 'preset/agent.cordis.yml'
+  if (!value || value.format !== 'workdsh-workflow' || ![1, 2, 3, 4, 5].includes(value.version) || value.entry !== 'preset/agent.cordis.yml'
     || !['compatible', 'staged'].includes(value.mode) || typeof value.name !== 'string' || !value.name.trim() || value.name.length > 120
     || typeof value.description !== 'string' || value.description.length > 4096 || typeof value.sourceId !== 'string') {
     throw new Error('工作流格式无效。');
@@ -105,6 +113,7 @@ export function readManifest(files: Record<string, WorkflowFile>): WorkflowManif
   if (value.version === 1 && (value.execution || value.stages?.some((n: WorkflowStage) => n.execution))) throw new Error('阶段能力绑定需要工作流格式 version: 2，避免旧版本忽略配置。');
   if (value.version < 3 && (value.execution?.team || value.stages?.some((n: WorkflowStage) => n.execution?.team))) throw new Error('阶段团队配置需要 version: 3。');
   if (value.version < 4 && value.stages?.some((n: WorkflowStage) => n.gate)) throw new Error('app-gen 状态机门禁需要 version: 4。');
+  if (value.version < 5 && value.stages?.some((n: WorkflowStage) => n.condition || n.component)) throw new Error('组件与 If-else 文本条件需要 version: 5。');
   validateExecution(value.execution);
   if (value.mode === 'staged') validateStages(value);
   return value as WorkflowManifest;
@@ -119,6 +128,8 @@ export function validateStages(manifest: WorkflowManifest) {
       || !['task', 'approval', 'check', 'branch', 'end'].includes(node.kind)) throw new Error('阶段 ID、名称或类型无效，ID 不能重复。');
     nodes.set(node.id, node);
     validateExecution(node.execution);
+    if (node.condition) { if (node.kind !== 'branch') throw new Error('文本条件只能用于 If-else 节点。'); validateCondition(node.condition); }
+    if (node.component && (node.kind !== 'task' || !['agent', 'read-file', 'write-file'].includes(node.component))) throw new Error('任务组件类型无效。');
     if (node.gate) {
       if (node.kind !== 'task' || node.gate.kind !== 'app-gen' || !Number.isInteger(node.gate.step) || node.gate.step < 0 || node.gate.step > 9) throw new Error('app-gen 门禁仅用于 Agent 节点，步骤为 0–9。');
       packagePath(node.gate.context);
@@ -129,7 +140,7 @@ export function validateStages(manifest: WorkflowManifest) {
       if (!Array.isArray(node.outputs) || !node.outputs.length || node.outputs.length > 32) throw new Error('任务和校验阶段需要声明实际产出文件。');
       node.outputs.forEach(packagePath);
     }
-    if (node.kind === 'branch') packagePath(node.file);
+    if (node.kind === 'branch' && !node.condition) packagePath(node.file);
   }
   if (!manifest.start || nodes.get(manifest.start)?.kind !== 'task') throw new Error('起始节点必须是 Agent 任务，以建立授权工作区。');
   const visit = (id: string, stack: Set<string>, seen: Set<string>) => {

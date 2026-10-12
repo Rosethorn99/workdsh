@@ -14,6 +14,7 @@ import { credentialRef } from '@deepseek-ai/dsh-credentials';
 import { capabilityCatalog, resolveStageCapabilities, composeStagePreset, applyConnectors, connectorsService, ConnectorMappingError, personaPrefix, skillDirectories, stageInstructions, teamInstructions } from './capabilities.js';
 import { readStageTeam } from './team-runtime.js';
 import { checkAppGenGate } from './app-gen-gate.js';
+import { evaluateCondition } from './condition-runtime.js';
 import { validateGraph } from './graph-operations.js';
 import { newWorkflowSeed, userWorkflowSource } from './starters.js';
 import { projectWorkflowBinding, projectWorkflowOptions } from './project-selection.js';
@@ -306,6 +307,12 @@ export class WorkflowEditor {
       if (node.kind === 'approval') { run.status = 'awaiting-approval'; return; }
       if (node.kind === 'end') { run.status = 'completed'; run.receipts.push({ stageId: node.id, at: new Date().toISOString() }); return; }
       if (node.kind === 'branch') {
+        if (node.condition) {
+          const receipt = await evaluateCondition(node.condition, run.cwd, signal);
+          run.receipts.push({ stageId: node.id, ...receipt, at: new Date().toISOString() });
+          run.current = (receipt.decision ? node.whenTrue : node.whenFalse)!;
+          continue;
+        }
         let exists = true;
         try { await this.output(run.cwd, node.file!, signal); } catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') exists = false; else throw error; }
         run.receipts.push({ stageId: node.id, decision: exists, at: new Date().toISOString() }); run.current = (exists ? node.whenTrue : node.whenFalse)!;

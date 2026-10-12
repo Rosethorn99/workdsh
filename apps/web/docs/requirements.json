@@ -126,7 +126,8 @@
         "tests/integration/workflow-canvas.test.mjs",
         "tests/integration/workflow-automatic.test.mjs",
         "scripts/probe-workflow-automatic.mjs",
-        "scripts/probe-native-expert-team.mjs"
+        "scripts/probe-native-expert-team.mjs",
+        "tests/integration/workflow-langflow.test.mjs"
       ],
       "acceptance": [
         "A03",

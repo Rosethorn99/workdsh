@@ -1,6 +1,6 @@
 {
   "name": "workdsh-plugin-experts",
-  "version": "0.1.0-alpha.13",
+  "version": "0.1.0-alpha.14",
   "private": false,
   "type": "module",
   "description": "Manages reusable experts and expert teams in WorkDSH.",

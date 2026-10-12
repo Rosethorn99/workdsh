@@ -1,0 +1,56 @@
+{
+  "repository": "https://github.com/langflow-ai/langflow",
+  "tag": "v1.12.5",
+  "license": "MIT",
+  "files": [
+    {
+      "path": "src/frontend/src/CustomNodes/GenericNode/index.tsx",
+      "sha256": "3ba6d591be253e47844abac7b229b51e20e4413efa0a66f43e1e9aa0e8d1cb98"
+    },
+    {
+      "path": "src/frontend/src/pages/FlowPage/components/PageComponent/helpers/helper-lines.ts",
+      "sha256": "689594cf8129d25813369d1d415e178de43b0526412a893cb62fac26ae5e3ef1"
+    },
+    {
+      "path": "src/frontend/src/pages/FlowPage/components/ConnectionLineComponent/index.tsx",
+      "sha256": "6ccd9ea0b1b07b704266142af48942be542bc5faf3ac54cd14f7606b0eb80116"
+    },
+    {
+      "path": "src/frontend/src/components/core/canvasControlsComponent/fit-view-options.ts",
+      "sha256": "d80673b18b52f62e8a403dadd93295cf53a8620c3b07d12268194c4714e50885"
+    },
+    {
+      "path": "src/frontend/src/CustomNodes/NoteNode/index.tsx",
+      "sha256": "382cda64c9246104d09c04b0809bf512e2777dcebdc5ec2f1976b637f930d50f"
+    }
+  ],
+  "commit": "52622284d3bbc6d2cddc7a4b0bf18b2161e4b88c",
+  "integration": "Source reuse and native WorkDSH adaptation; no Langflow Python runtime",
+  "adaptations": [
+    {
+      "source": "helper-lines.ts",
+      "target": "src/client/langflow/upstream/helper-lines.ts",
+      "changes": "Original source with license and provenance header"
+    },
+    {
+      "source": "fit-view-options.ts",
+      "target": "src/client/langflow/upstream/fit-view-options.ts",
+      "changes": "Original source with license and provenance header"
+    },
+    {
+      "source": "ConnectionLineComponent/index.tsx",
+      "target": "src/client/langflow/ConnectionLine.tsx",
+      "changes": "Remove global Langflow store coupling; retain path and endpoint geometry"
+    },
+    {
+      "source": "GenericNode/index.tsx",
+      "target": "src/client/langflow/NodeCard.tsx",
+      "changes": "Layout reference; WorkDSH implementation for existing stages and capabilities"
+    },
+    {
+      "source": "NoteNode/index.tsx",
+      "target": "src/client/langflow/NoteCard.tsx",
+      "changes": "Layout reference; WorkDSH layout-only notes and storage"
+    }
+  ]
+}

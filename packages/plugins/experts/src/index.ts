@@ -1,3 +1,5 @@
+import { registerWorkflowPresets } from './workflows/host.js';
+import { WorkflowEditor } from './workflows/editor-service.js';
 import { fileURLToPath } from 'node:url';
 import { expertManagerSkillContent, expertManagerSkillMeta } from './authoring/guide.js';
 import { Context } from '@deepseek-ai/cordis';
@@ -32,7 +34,7 @@ export const name = 'workdsh-plugin-experts';
 export const inject = [
   'loader', 'storageDomain', 'agentPresets', 'sessionController',
   'workdshIdentity', 'workdshAccess', 'workdshAudit', 'workdshSessionAccess', 'workdshSkills',
-  'connection', 'tools', 'skills', 'agents', 'agentTeams', 'sessionQuery', 'fs',
+  'connection', 'tools', 'skills', 'agents', 'agentTeams', 'sessionQuery', 'fs', 'credentials',
 ];
 
 /**
@@ -70,9 +72,14 @@ export async function applyExpertsHost(ctx: Context, options: ExpertsManagerOpti
 }
 
 /** The consumer declares the services provided by the manager child Fibers. */
-function applyIntegration(ctx: Context, options: ExpertsManagerOptions = {}): void {
-  registerExpertExecutionGuard(ctx, options);
-  registerExpertsConnection(ctx);
+async function applyIntegration(ctx: Context, options: ExpertsManagerOptions = {}): Promise<void> {
+  await registerWorkflowPresets(ctx);
+  const workflowEditor = await WorkflowEditor.open(ctx, options.agentsHome);
+  ctx.effect(() => () => workflowEditor.dispose());
+  ctx.on('agent/created', async ({ agent, signal }) => { await workflowEditor.admit(agent, signal, true); });
+  ctx.on('agent/pre-step', async ({ agent, signal }, next) => { await workflowEditor.admit(agent, signal, false); return next(); });
+  registerExpertExecutionGuard(ctx, options, (actor, sessionId, memberName, signal) => workflowEditor.resolveNativeRole(actor, sessionId, memberName, signal));
+  registerExpertsConnection(ctx, workflowEditor);
   registerExpertManagementTools(ctx);
   ctx.effect(() => registerExpertManagerSkill(ctx));
 }

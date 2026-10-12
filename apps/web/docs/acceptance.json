@@ -898,6 +898,115 @@
       ],
       "status": "pending",
       "evidence": []
+    },
+    {
+      "id": "W01",
+      "phase": "P1",
+      "requirements": [
+        "R04",
+        "R05"
+      ],
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "id": "W02",
+      "phase": "P1",
+      "requirements": [
+        "R04",
+        "R15"
+      ],
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "id": "W03",
+      "phase": "P1",
+      "requirements": [
+        "R03",
+        "R04"
+      ],
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "id": "W04",
+      "phase": "P1",
+      "requirements": [
+        "R04",
+        "R09"
+      ],
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "id": "W05",
+      "phase": "P1",
+      "requirements": [
+        "R04"
+      ],
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "id": "W06",
+      "phase": "P1",
+      "requirements": [
+        "R03",
+        "R05"
+      ],
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "id": "W07",
+      "phase": "P1",
+      "requirements": [
+        "R04",
+        "R15"
+      ],
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "id": "W08",
+      "phase": "P1",
+      "requirements": [
+        "R04",
+        "R07"
+      ],
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "id": "W09",
+      "phase": "P1",
+      "requirements": [
+        "R04"
+      ],
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "id": "W10",
+      "phase": "P1",
+      "requirements": [
+        "R01",
+        "R02",
+        "R04"
+      ],
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "id": "W11",
+      "phase": "P1",
+      "requirements": [
+        "R04",
+        "R08"
+      ],
+      "status": "pending",
+      "evidence": []
     }
   ]
 }

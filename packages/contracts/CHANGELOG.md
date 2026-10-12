@@ -1,3 +1,7 @@
+# 0.1.0-alpha.10 — Unreleased（2026-10-12）
+
+- 项目工作流引用固定流程、运行、阶段与配置修订；原生成员会话按授权父链继承项目上下文。
+
 # 0.1.0-alpha.9 — 2026-09-18
 
 - 新增 `ProjectTaskContext` 与只读 `ProjectService.taskContext(actor, sessionId)`：按 Session 反查所属项目任务及其固定的项目与配置修订；兼容补全（同时用于项目路径 chip、present 交付归属与项目任务上下文注入），既有方法签名不变。

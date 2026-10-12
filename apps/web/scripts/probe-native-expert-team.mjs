@@ -8,16 +8,19 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { Context } from '@deepseek-ai/cordis';
 import { LlmAdapter, createMessage } from '@deepseek-ai/dsh-llm';
-import { COMPOSITION_FILE } from '@deepseek-ai/dsh-agent-presets';
 import { ExpertsManager } from '../../../packages/plugins/experts/dist/index.js';
 import { registerExpertExecutionGuard } from '../../../packages/plugins/experts/dist/runtime/execution-guard.js';
+import { WorkflowEditor } from '../../../packages/plugins/experts/dist/workflows/editor-service.js';
+import { patchYaml, presetDocument } from '../../../packages/plugins/experts/dist/workflows/authoring.js';
 import { registerExpertManagementTools } from '../../../packages/plugins/experts/dist/tools/management-tools.js';
 import { AccessManager } from '../../../packages/plugins/access/dist/index.js';
 import { AuditJournal } from '../../../packages/plugins/audit/dist/index.js';
 import { SkillManager } from '../../../packages/plugins/skills/dist/index.js';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const artifacts = join(root, '.artifacts/dsh-0.1.6-upgrade/native-expert-team');
+const workflowTeamConfig=process.argv.includes('--workflow-team-config');
+const workflowStage = process.argv.includes('--workflow-stage') || workflowTeamConfig;
+const artifacts = workflowStage ? resolve(root, '../../.artifacts/workflow-native-team') : join(root, '.artifacts/dsh-0.1.6-upgrade/native-expert-team');
 await mkdir(artifacts, { recursive: true });
 await mkdir(join(root, '.test-runtime'), { recursive: true });
 const cold = process.argv.includes('--resume');
@@ -28,15 +31,15 @@ const requireRoot = createRequire(import.meta.url);
 const requireDsh = createRequire(requireRoot.resolve('@deepseek-ai/dsh/package.json'));
 const requireExperts = createRequire(join(root, '../../packages/plugins/experts/package.json'));
 const baseUrl = pathToFileURL(dirname(requireRoot.resolve('@deepseek-ai/dsh/package.json')) + '/').href;
-const ctx = new Context();
+const ctx = new Context().extend({ baseUrl });
 const actor = { principalId: 'probe-owner', organizationId: 'probe-org', resolvedBy: 'probe-identity', requestId: 'probe' };
-const report = { home, version: '0.1.6-alpha.2', mode: cold ? 'cold-resume' : 'production-adapter', checks: [], requests: [], notRun: ['real paid model', 'professional content acceptance', 'user preview deployment'] };
+const report = { home, version: JSON.parse(await readFile(requireRoot.resolve('@deepseek-ai/dsh/package.json'), 'utf8')).version, mode: cold ? 'cold-resume' : workflowTeamConfig?'workflow-stage-team-configuration':workflowStage ? 'workflow-stage' : 'production-adapter', checks: [], requests: [], notRun: ['real paid model', 'professional content acceptance', 'user preview deployment'] };
 const pass = (name, detail) => { report.checks.push({ name, detail }); console.log(`PASS ${name}`); };
 const blocks = text => [{ type: 'text', text }];
 const handles = [];
 const observed = new Map();
 const concurrent = new Set();
-let leadId;
+let leadId, workflowEditor;
 const roleNames = ['alpha', 'beta', 'reviewer', 'waiter', 'writer'];
 ctx.on('agent/created', ({ agent }) => { observed.set(agent.id, agent); });
 const signal = AbortSignal.timeout(120_000);
@@ -61,6 +64,8 @@ class Model extends LlmAdapter {
     if (member?.role === 'teammate') {
       assert.ok(system.includes(`ROLE_${member.name.toUpperCase()}`), `Wrong role for ${member.name}: ${system}`);
       assert.ok(!system.includes('ROLE_LEAD'), 'child inherited Lead persona');
+      if (workflowStage) { assert.ok(system.includes('STAGE_CONTRACT')); assert.ok(system.includes('WORKFLOW_BASE')); }
+      if (workflowTeamConfig) {assert.ok(system.includes('STAGE_TEAM_ROLE_'+member.name)); assert.ok(system.includes('STAGE_TEAM_TASK_'+member.name));}
       if (!cold && ['alpha', 'beta'].includes(member.name) && !concurrent.has(agent.id)) {
         concurrent.add(agent.id);
         if (concurrent.size === 2) report.concurrentRunning = [...concurrent].filter(id => ctx.agents.get(id)?.status === 'running').length;
@@ -107,22 +112,31 @@ try {
   const presetRoot = join(home, 'presets');
   if (!cold) {
     await mkdir(join(presetRoot, 'standard'), { recursive: true });
-    await writeFile(join(presetRoot, 'standard', COMPOSITION_FILE), '- name: "@deepseek-ai/dsh-persona"\n  config:\n    prefix: BASE\n- name: "@deepseek-ai/dsh-skill-filesystem"\n  config:\n    includeDefaultRoots: false\n    watch: false\n- name: "@deepseek-ai/dsh-tool-skill"\n');
     for (const name of roleNames) {
       const dir = join(process.env.DSH_AGENTS_HOME, 'skills', `method-${name}`);
       await mkdir(dir, { recursive: true });
       await writeFile(join(dir, 'SKILL.md'), `---\nname: method-${name}\ndescription: Fixture ${name} method\n---\nMETHOD_${name.toUpperCase()}\n`);
     }
   }
-  for (const [name, config] of [['dsh-storage'], ['dsh-storage-json', { root: join(home, 'storage') }], ['dsh-storage-domain', { backend: 'json' }], ['dsh-skill'], ['dsh-skill-filesystem', { watch: false }], ['dsh-agent-presets', { default: 'standard', roots: [{ path: presetRoot, trust: 'user' }], includeShippedRoot: false, includeUserRoot: false }]]) await load(`@deepseek-ai/${name}`, config);
+  for (const [name, config] of [['dsh-storage'], ['dsh-storage-json', { root: join(home, 'storage') }], ['dsh-storage-domain', { backend: 'json' }], ['dsh-skill'], ['dsh-skill-filesystem', { watch: false }], ['dsh-agent-preset-registry', { default: 'standard' }]]) await load(`@deepseek-ai/${name}`, config);
+  await ctx.loader.create({ name: '@deepseek-ai/dsh-agent-preset', config: { id: 'standard', plugins: [
+    { name: '@deepseek-ai/dsh-persona', config: { prefix: 'BASE' } },
+    { name: '@deepseek-ai/dsh-skill-filesystem', config: { includeDefaultRoots: false, watch: false } },
+    { name: '@deepseek-ai/dsh-tool-skill' },
+  ] } });
   ctx.provide('workdshIdentity', { id: actor.resolvedBy, async resolve() { return actor; }, membership(org, principal) { return org === actor.organizationId && principal === actor.principalId ? { organizationId: org, principalId: principal, principalKind: 'human', role: 'owner', state: 'active', revision: 'fixture-v1' } : undefined; } });
   for (const plugin of [AuditJournal, AccessManager]) await ctx.plugin(plugin);
   await ctx.plugin({ name: 'fixture-skills-host', inject: ['skills'], apply(scope) { new SkillManager(scope); } });
   ctx.provide('sessionController', { async inspect(id) { return { sessionId: id }; } });
-  ctx.provide('workdshSessionAccess', { async create(request) { await rootAgent(request.sessionId, request.agentPreset); return { sessionId: request.sessionId }; } });
-  await ctx.plugin(ExpertsManager);
-  const composition = ctx.plugin({ name: 'production-expert-adapter', inject: ['workdshExperts', 'workdshIdentity', 'tools', 'agentTeams', 'agentPresets', 'agents', 'skills', 'systemPrompt', 'workdshSkills'], apply(scope) { registerExpertExecutionGuard(scope); registerExpertManagementTools(scope); } });
+  ctx.provide('workdshSessionAccess', { async create(request) { await rootAgent(request.sessionId, request.agentPreset); return { sessionId: request.sessionId }; }, async inspect(id) { const session = await history(id); return { meta: ctx.agents.get(id)?.session.header, events: session.events }; } });
+  await ctx.extend({ baseUrl }).plugin(ExpertsManager);
+  const composition = ctx.plugin({ name: 'production-expert-adapter', inject: ['workdshExperts', 'workdshIdentity', 'tools', 'agentTeams', 'agentPresets', 'agents', 'skills', 'systemPrompt', 'workdshSkills'], apply(scope) { registerExpertExecutionGuard(scope, {}, (actor, id, name, signal) => workflowEditor?.resolveNativeRole(actor, id, name, signal)); registerExpertManagementTools(scope); } });
   await composition;
+  if (workflowStage) {
+    workflowEditor = await WorkflowEditor.open(ctx.extend({ baseUrl }));
+    ctx.on('agent/created', ({ agent, signal }) => workflowEditor.admit(agent, signal, true));
+    ctx.on('agent/pre-step', async ({ agent, signal }, next) => { await workflowEditor.admit(agent, signal, false); return next(); });
+  }
   let lead, preset, expertId;
   if (cold) {
     const saved = JSON.parse(await readFile(join(home, 'resume.json'), 'utf8'));
@@ -146,8 +160,27 @@ try {
     const proof = await ctx.workdshExperts.confirmPublish(actor, confirmation.confirmationToken);
     const published = await ctx.workdshExperts.publish(actor, expertId, draft.revision, validation.dependencyLockDigest, proof, { operationId: 'team-publish' });
     preset = published.presetRevisionRef;
-    const plan = await ctx.workdshExperts.prepareExecution(actor, expertId, undefined, home);
-    const created = await ctx.workdshExperts.createExecution(actor, plan.executionPlanId, { operationId: 'team-start' });
+    let created;
+    if (workflowStage) {
+      const template=workflowTeamConfig?(await ctx.workdshExperts.resolveWorkflowRevision(actor,{expertId,revisionId:published.revision.revisionId},signal)).revision:undefined;
+      const call = (action, payload = {}) => workflowEditor.dispatch(actor, { action, operationId: crypto.randomUUID(), ...payload }, signal);
+      let d = await call('copy', { workflowId: 'workdsh-ai-webapp' }), text = d.draft.files['workflow.yaml'].content;
+      for (const [path, value] of [[['version'], workflowTeamConfig?3:2], [['mode'], 'staged'], [['start'], 'first'], [['stages'], [
+        { id: 'first', name: 'Native Team stage', kind: 'task', prompt: 'STAGE_CONTRACT: deliver verified local evidence.', outputs: ['native-result.md'], next: 'done', execution: { executor: { kind: 'team', expertId, revisionId: published.revision.revisionId }, ...(workflowTeamConfig?{team:{lead:{expert:{expertId,revisionId:published.revision.revisionId},goal:'STAGE_TEAM_GOAL'},strategy:'sequential',members:roleNames.map(key=>({key,expert:template.teamMembers[key],role:'STAGE_TEAM_ROLE_'+key,task:'STAGE_TEAM_TASK_'+key,skills:[],connectors:[]}))}}:{}), connectors: { mode: 'explicit', requirements: [] } } },
+        { id: 'done', name: 'End', kind: 'end' },
+      ]]]) text = patchYaml(text, path, value);
+      // A small authored preset keeps this probe focused on role/Team assembly.
+      const document = presetDocument(d.draft.files['preset/agent.cordis.yml'].content);document.contents.items = document.contents.items.filter(row => ['persona','skill-filesystem','tool-skill'].includes(row.get('id')));
+      const fixturePreset = patchYaml(document.toString(),[0,'config','text'],'WORKFLOW_BASE');
+      d = await call('save', { workflowId: d.draft.id, expectedRevision: d.draft.revision, patches: { 'workflow.yaml': { encoding: 'utf8', content: text }, 'preset/agent.cordis.yml': { encoding: 'utf8', content: fixturePreset } } });
+      const validation = await call('validate', { workflowId: d.draft.id, expectedRevision: d.draft.revision });
+      assert.equal(validation.ok, true, JSON.stringify(validation.issues));
+      d = await call('publish', { workflowId: d.draft.id, expectedRevision: d.draft.revision });
+      created = await call('create', { workflowId: d.draft.id, sessionId: crypto.randomUUID(), workspaceId: 'fixture-workspace' }); preset = created.presetId;
+    } else {
+      const plan = await ctx.workdshExperts.prepareExecution(actor, expertId, undefined, home);
+      created = await ctx.workdshExperts.createExecution(actor, plan.executionPlanId, { operationId: 'team-start' });
+    }
     leadId = created.sessionId; lead = ctx.agents.get(leadId);
     lead.followup(createMessage({ role: 'user', source: { kind: 'user' }, content: blocks('Prepare this team fixture.') }));
     await settled(leadId);
@@ -167,8 +200,8 @@ try {
     pass('fork-member-overrides-lead-persona', fork.member.id);
     await assert.rejects(ctx.agentTeams.spawnTeammate(lead, { name: 'unknown', description: 'negative', prompt: blocks('Must not run'), context: 'fresh', provider: 'spawn', signal }));
     assert.ok(!report.requests.some(request => request.name === 'unknown'), 'unknown member must never reach the model');
-    await assert.rejects(ctx.workdshExperts.resolveNativeRole({ ...actor, principalId: 'other' }, leadId, 'alpha'), e => e.code === 'experts/forbidden');
-    await assert.rejects(ctx.workdshExperts.resolveNativeRole({ ...actor, organizationId: 'other-org' }, leadId, 'alpha'), e => e.code === 'experts/forbidden');
+    await assert.rejects((workflowStage ? workflowEditor : ctx.workdshExperts).resolveNativeRole({ ...actor, principalId: 'other' }, leadId, 'alpha'), e => /forbidden/.test(e.code));
+    await assert.rejects((workflowStage ? workflowEditor : ctx.workdshExperts).resolveNativeRole({ ...actor, organizationId: 'other-org' }, leadId, 'alpha'), e => /forbidden/.test(e.code));
     pass('unknown-member-and-cross-owner-cross-org-denied-before-model');
     const first = await ctx.agentTeams.createTask(lead, { subject: 'Draft', description: 'Prepare draft' });
     const next = await ctx.agentTeams.createTask(lead, { subject: 'Review', description: 'Review draft', blockedBy: [first.id] });
@@ -195,16 +228,17 @@ try {
     const ids = Object.fromEntries(ctx.agentTeams.listMembers(lead).map(m => [m.name, m.id]));
     await writeFile(join(home, 'resume.json'), JSON.stringify({ leadId, preset, expertId, ids }));
   }
+  if (workflowEditor) await workflowEditor.dispose();
   await ctx.fiber.dispose();
   pass('runtime-disposed');
   if (!cold) {
-    const child = spawnSync(process.execPath, [fileURLToPath(import.meta.url), '--resume', home], { cwd: root, env: process.env, encoding: 'utf8', timeout: 60000 });
+    const child = spawnSync(process.execPath, [fileURLToPath(import.meta.url), ...(workflowTeamConfig?['--workflow-team-config']:workflowStage ? ['--workflow-stage'] : []), '--resume', home], { cwd: root, env: process.env, encoding: 'utf8', timeout: 60000 });
     await writeFile(join(artifacts, 'cold.log'), child.stdout + child.stderr);
     assert.equal(child.status, 0, child.stdout + child.stderr);
     pass('new-process-cold-resume-passed');
   }
   report.status = 'passed';
-} catch (error) { report.status = 'failed'; report.error = error.stack; console.error(error); process.exitCode = 1; }
+} catch (error) { report.status = 'failed'; report.error = error.stack; report.errorDetails = error.details; console.error(error); if(error.details)console.error(JSON.stringify(error.details)); process.exitCode = 1; }
 finally {
   await ctx.fiber.dispose();
   await writeFile(join(artifacts, cold ? 'cold-result.json' : 'result.json'), JSON.stringify(report, null, 2));

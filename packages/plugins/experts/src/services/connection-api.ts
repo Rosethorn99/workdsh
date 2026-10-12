@@ -1,3 +1,5 @@
+import { configureFeishu, createWorkflowSession, listWorkflows } from '../workflows/host.js';
+import { WorkflowError, type WorkflowEditor } from '../workflows/editor-service.js';
 import type { Context } from '@deepseek-ai/cordis';
 import type { ConnectionRpcResult, HostConnectionHandle } from '@deepseek-ai/dsh-client-connection';
 import type {
@@ -299,7 +301,7 @@ function json(result: ConnectionRpcResult<unknown>, status = 200): Response {
 }
 
 /** Register the expert management API inside Connection's authenticated `/api` carrier. */
-export function registerExpertsConnection(ctx: Context): void {
+export function registerExpertsConnection(ctx: Context, workflowEditor?: WorkflowEditor): void {
   const connection = (ctx as Context & { connection: HostConnectionHandle }).connection;
   const manager: ExpertsManager = ctx.workdshExperts;
   const lifetime = new AbortController();
@@ -334,6 +336,23 @@ export function registerExpertsConnection(ctx: Context): void {
         const body = record(JSON.parse(text));
         if (!body) return json(fail('experts/invalid-request', '专家管理请求格式无效。'), 400);
         const actor = await ctx.workdshIdentity.resolve(undefined, request.signal);
+        if (body.endpoint === 'workflow-authoring') {
+          const input = record(body.payload);
+          if (!input || !workflowEditor) return json(fail('workflows/unavailable', '工作流编辑服务不可用。'));
+          try { return json(ok(await workflowEditor.dispatch(actor, input, request.signal))); }
+          catch (error) { return json(fail(error instanceof WorkflowError ? error.code : 'workflows/invalid-request', error instanceof Error ? error.message : '工作流操作失败。', error instanceof WorkflowError ? error.details : {})); }
+        }
+        if (body.endpoint === 'workflow-list') return json(ok(await listWorkflows(ctx)));
+        if (body.endpoint === 'workflow-create' || body.endpoint === 'workflow-configure') {
+          const input = record(body.payload);
+          if (!input) return json(fail('workflows/invalid-request', '工作流请求无效。'), 400);
+          try {
+            const value = body.endpoint === 'workflow-create' ? await createWorkflowSession(ctx, input, request.signal) : await configureFeishu(ctx, input, request.signal);
+            return json(ok(value));
+          } catch (error) {
+            return json(fail('workflows/unavailable', body.endpoint === 'workflow-configure' ? '飞书配置未保存，请检查字段与凭据服务。' : error instanceof Error ? error.message : '工作流操作失败。'));
+          }
+        }
         return json(await dispatch(manager, actor, body.endpoint, body.payload, request.signal));
       } catch (error) {
         if (error instanceof SyntaxError) return json(fail('experts/invalid-request', '专家管理请求格式无效。'), 400);

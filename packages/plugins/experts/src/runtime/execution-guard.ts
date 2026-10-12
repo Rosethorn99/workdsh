@@ -7,9 +7,15 @@ import { expertPresetDir, readExpertPreset } from './preset-compiler.js';
 import { join } from 'node:path';
 import { ExpertsError } from '../domain/values.js';
 import { expertPersonaConfig } from './preset-compiler.js';
+import type { ActorContext, ExpertRevision } from 'workdsh-contracts';
+
+export interface WorkflowNativeRole {
+  binding: { presetRevisionRef: string }; revision: ExpertRevision;
+  persona: ReturnType<typeof expertPersonaConfig>; skills: SkillFiles.Config; digest: string;
+}
 
 /** Asset admission and role composition only. No child driver, mailbox or Team state. */
-export function registerExpertExecutionGuard(ctx: Context, options: { agentsHome?: string } = {}): void {
+export function registerExpertExecutionGuard(ctx: Context, options: { agentsHome?: string } = {}, resolveWorkflow?: (actor: ActorContext, rootSessionId: string, memberName: string | undefined, signal?: AbortSignal) => Promise<WorkflowNativeRole | undefined>): void {
   const installed = new WeakMap<Agent, string>();
 
   async function prepare(agent: Agent, signal: AbortSignal | undefined, creating: boolean): Promise<void> {
@@ -18,9 +24,9 @@ export function registerExpertExecutionGuard(ctx: Context, options: { agentsHome
     const root = membership?.root ?? agent;
     const header = agent.session.header;
     const actor = await ctx.workdshIdentity.resolve({ sessionId: String(root.id) }, signal);
-    let role;
+    let role; const workflowRole = resolveWorkflow ? await resolveWorkflow(actor, String(root.id), membership?.role === 'teammate' ? membership.name : undefined, signal) : undefined;
     try {
-      role = await ctx.workdshExperts.resolveNativeRole(actor, String(root.id), membership?.role === 'teammate' ? membership.name : undefined, signal);
+      role = workflowRole ?? await ctx.workdshExperts.resolveNativeRole(actor, String(root.id), membership?.role === 'teammate' ? membership.name : undefined, signal);
     } catch (error) {
       const unbound = error instanceof ExpertsError && error.code === 'experts/not-found' && error.details?.reason === 'unbound';
       // The trusted create endpoint stores a Lead asset binding after Agent creation.
@@ -40,24 +46,25 @@ export function registerExpertExecutionGuard(ctx: Context, options: { agentsHome
       if (childActor.principalId !== actor.principalId || childActor.organizationId !== actor.organizationId) throw new ExpertsError('experts/forbidden', '成员和主任务不属于同一授权主体。');
     }
     const { revision } = role;
-    if (root === agent && !revision.definition.team) return;
-    if (installed.get(agent) === revision.compositionDigest) return;
+    if (root === agent && !revision.definition.team && !workflowRole) return;
+    const digest = workflowRole?.digest ?? revision.compositionDigest;
+    if (installed.get(agent) === digest) return;
     signal?.throwIfAborted();
     // Read only our already verified immutable composition, not arbitrary plugins.
     const rows = (JSON.parse(await readExpertPreset(revision.presetRevisionRef, agentsHome)) as { plugins: { name?: string; config?: SkillFiles.Config }[] }).plugins;
-    const skills = rows.find(row => row.name === '@deepseek-ai/dsh-skill-filesystem')?.config;
+    const skills = workflowRole?.skills ?? rows.find(row => row.name === '@deepseek-ai/dsh-skill-filesystem')?.config;
     if (!skills) throw new ExpertsError('experts/dependency-missing', '固定专家组合缺少技能目录。');
     const definition = revision.definition;
     const packageRoot = definition.packageDocuments ? join(expertPresetDir(revision.presetRevisionRef, agentsHome), 'expert-package') : undefined;
     // The official Agent scope owns these providers and their disposal.
-    const persona = agent.ctx.plugin(Persona, expertPersonaConfig({ definition, packageRoot, teamMembers: revision.teamMembers }));
+    const persona = agent.ctx.plugin(Persona, workflowRole?.persona ?? expertPersonaConfig({ definition, packageRoot, teamMembers: revision.teamMembers }));
     ctx.effect(() => () => persona.dispose());
     await persona;
     const skillFiles = agent.ctx.plugin(SkillFiles, skills);
     ctx.effect(() => () => skillFiles.dispose());
     await skillFiles;
     signal?.throwIfAborted();
-    installed.set(agent, revision.compositionDigest);
+    installed.set(agent, digest);
   }
 
   ctx.on('agent/created', async ({ agent, signal }) => { await prepare(agent, signal, true); });

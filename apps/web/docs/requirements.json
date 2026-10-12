@@ -22,7 +22,8 @@
       "acceptance": [
         "A01",
         "A12",
-        "E05"
+        "E05",
+        "W10"
       ]
     },
     {
@@ -48,7 +49,8 @@
         "A00",
         "A01",
         "A02",
-        "Q04"
+        "Q04",
+        "W10"
       ]
     },
     {
@@ -94,7 +96,9 @@
         "A20-P3",
         "EC02",
         "EC03",
-        "E03"
+        "E03",
+        "W03",
+        "W06"
       ]
     },
     {
@@ -113,7 +117,16 @@
       "checks": [
         "tests/integration/expert-manager.test.mjs",
         "tests/integration/expert-native-presets.test.mjs",
-        "tests/integration/expert-results.test.mjs"
+        "tests/integration/expert-results.test.mjs",
+        "tests/integration/workflow-authoring.test.mjs",
+        "tests/integration/studio-workflows.test.mjs",
+        "tests/integration/studio-workflow-runtime.test.mjs",
+        "tests/integration/workflow-graph.test.mjs",
+        "tests/integration/workflow-capabilities.test.mjs",
+        "tests/integration/workflow-canvas.test.mjs",
+        "tests/integration/workflow-automatic.test.mjs",
+        "scripts/probe-workflow-automatic.mjs",
+        "scripts/probe-native-expert-team.mjs"
       ],
       "acceptance": [
         "A03",
@@ -129,7 +142,17 @@
         "EC01",
         "EC02",
         "EC04",
-        "EC05"
+        "EC05",
+        "W01",
+        "W02",
+        "W03",
+        "W04",
+        "W05",
+        "W07",
+        "W08",
+        "W09",
+        "W10",
+        "W11"
       ]
     },
     {
@@ -160,7 +183,9 @@
         "J08",
         "UI03",
         "UI08",
-        "EC04"
+        "EC04",
+        "W01",
+        "W06"
       ]
     },
     {
@@ -218,7 +243,8 @@
         "UI14",
         "B02",
         "B03",
-        "O04"
+        "O04",
+        "W08"
       ]
     },
     {
@@ -266,7 +292,8 @@
         "UI15",
         "J07-P3",
         "J10-P2",
-        "J10-P3"
+        "J10-P3",
+        "W11"
       ]
     },
     {
@@ -292,7 +319,8 @@
         "O01",
         "O02",
         "O03",
-        "O04"
+        "O04",
+        "W04"
       ]
     },
     {
@@ -450,7 +478,9 @@
       ],
       "acceptance": [
         "A00",
-        "EC01"
+        "EC01",
+        "W02",
+        "W07"
       ]
     }
   ]

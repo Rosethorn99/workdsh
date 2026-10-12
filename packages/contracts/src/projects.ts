@@ -14,7 +14,16 @@ export interface ProjectWorkItem { readonly id: string; readonly projectId: stri
 export interface ProjectAssetRef { readonly id: string; readonly projectId: string; readonly nodeId: string; readonly assetId: string; readonly revisionId: string; readonly name: string; readonly kind: string; readonly createdAt: string; }
 export type ProjectInputRefKind = 'work-item' | 'asset' | 'skill';
 export interface ProjectInputRef { readonly kind: ProjectInputRefKind; readonly id: string; readonly revision: string; readonly label: string; }
-export interface ProjectTaskLink { readonly id: string; readonly projectId: string; readonly sessionId: string; readonly title: string; readonly configRevisionId: string; readonly capabilities?: readonly ProjectCapabilityRef[]; readonly workItemId?: string; readonly references: readonly ProjectInputRef[]; readonly createdAt: string; }
+/** UI navigation only; the Project service rechecks the target task before displaying it. */
+export const PROJECT_TASK_FOCUS_EVENT = 'workdsh:project-task-focus';
+export interface ProjectTaskFocus { readonly projectId: string; readonly sessionId: string; }
+export interface ProjectWorkflowRef { readonly workflowId: string; readonly revisionId: string; readonly runId: string; readonly stageId: string; }
+export interface ProjectWorkflowOwner {
+  snapshot: ProjectSnapshot; sessionId?: string; mode: 'task' | 'plan' | 'launch'; input?: string;
+  references?: readonly ProjectInputRef[]; activateConversation?: (conversationId:string)=>void; done: (sessionId:string)=>void; refresh:()=>Promise<void>;
+}
+
+export interface ProjectTaskLink { readonly id: string; readonly projectId: string; readonly sessionId: string; readonly title: string; readonly configRevisionId: string; readonly capabilities?: readonly ProjectCapabilityRef[]; readonly workItemId?: string; readonly references: readonly ProjectInputRef[]; readonly workflow?: ProjectWorkflowRef; readonly createdAt: string; }
 export interface ProjectTaskContext { readonly availableCapabilities?: readonly ProjectCapabilityRef[]; readonly project: Project; readonly config: ProjectConfigRevision; readonly task: ProjectTaskLink; }
 export interface ProjectActivity { readonly id: string; readonly projectId: string; readonly kind: 'project' | 'work-item' | 'asset' | 'task'; readonly text: string; readonly actorId: string; readonly createdAt: string; }
 export interface ProjectSnapshot { readonly project: Project; readonly config: ProjectConfigRevision; readonly workItems: readonly ProjectWorkItem[]; readonly assets: readonly ProjectAssetRef[]; readonly tasks: readonly ProjectTaskLink[]; readonly activity: readonly ProjectActivity[]; }
@@ -34,7 +43,7 @@ export interface ProjectService {
   addAsset(actor: ActorContext, projectId: string, asset: Omit<ProjectAssetRef, 'id'|'projectId'|'createdAt'>, signal?: AbortSignal): Promise<ProjectAssetRef>;
   removeAsset(actor: ActorContext, projectId: string, refId: string, signal?: AbortSignal): Promise<void>;
   validateInputRefs(actor: ActorContext, projectId: string, references: readonly ProjectInputRef[], signal?: AbortSignal): Promise<readonly ProjectInputRef[]>;
-  linkTask(actor: ActorContext, projectId: string, sessionId: string, title: string, workItemId?: string, references?: readonly ProjectInputRef[], signal?: AbortSignal, capabilities?: readonly ProjectCapabilityRef[]): Promise<ProjectTaskLink>;
+  linkTask(actor: ActorContext, projectId: string, sessionId: string, title: string, workItemId?: string, references?: readonly ProjectInputRef[], signal?: AbortSignal, capabilities?: readonly ProjectCapabilityRef[], configRevisionId?: string, workflow?: ProjectWorkflowRef): Promise<ProjectTaskLink>;
   taskContext(actor: ActorContext, sessionId: string, signal?: AbortSignal): Promise<ProjectTaskContext | undefined>;
   noteDeliveryGap(actor: ActorContext, projectId: string, text: string, signal?: AbortSignal): Promise<void>;
 }

@@ -75,7 +75,9 @@
       "tests",
       "resources/skills/workdsh-expert-manager",
       "resources/templates",
-      "src/services/preferences"
+      "src/services/preferences",
+      "src/workflows",
+      "resources/workflows"
     ],
     "moduleVersion": "0.1",
     "requirements": [

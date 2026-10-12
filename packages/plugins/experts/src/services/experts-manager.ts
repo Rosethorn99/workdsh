@@ -82,6 +82,7 @@ type WorkspaceId = NonNullable<SessionCreateRequest['workspaceId']>;
 /** The minimal Session-ingress surface experts consumes (owned by the access plugin). */
 interface SessionAccess {
   create(request: SessionCreateRequest, signal?: AbortSignal): Promise<SessionCreateValue>;
+  inspect(sessionId: SessionId, signal?: AbortSignal): ReturnType<Context['sessionController']['inspect']>;
 }
 
 declare module '@deepseek-ai/cordis' {
@@ -1272,6 +1273,26 @@ export class ExpertsManager extends Service implements ExpertsService {
   }
 
   // ── execution (native Session, bound to one frozen revision) ────────────────
+
+  async listWorkflowRevisions(actor: ActorContext, expertId: string, signal?: AbortSignal): Promise<ExpertRevision[]> {
+    await this.get(actor, expertId, undefined, signal);
+    return [...this.revisionsTable().entries()].map(([, rev]) => rev).filter(rev => rev.expertId === expertId);
+  }
+
+  /** Workflows consume exact published assets without creating a second expert Session or upgrading its revision. */
+  async resolveWorkflowRevision(actor: ActorContext, ref: ExpertRevisionRef, signal?: AbortSignal) {
+    assertActorContext(actor); await this.ensureSeeded(actor, signal);
+    const expert = this.loadExpert(ref.expertId);
+    if (!this.isVisible(actor, expert)) throw new ExpertsError('experts/not-found', '未找到阶段绑定的专家。');
+    await this.authorize(actor, 'experts.prepare-execution', expert, signal);
+    if (expert.availability !== 'enabled') throw new ExpertsError('experts/disabled', '阶段绑定专家已停用或归档。');
+    const revision = this.loadRevision(ref.expertId, ref.revisionId);
+    if (revision.definition.team && revision.compilerVersion !== COMPILER_VERSION) throw new ExpertsError('experts/preset-broken', '专家团需要升级并显式重新绑定版本，工作流不会自动升级。');
+    if (revision.definition.futureRequirements.some(r => r.required)) throw new ExpertsError('experts/unsupported-capability', '专家存在尚未满足的必需能力。');
+    await this.verifyRevision(actor, revision, signal);
+    for (const member of Object.values(revision.teamMembers ?? {})) await this.resolveWorkflowRevision(actor, member, signal);
+    return { revision, preset: JSON.parse(await readExpertPreset(revision.presetRevisionRef, this.agentsHome)) as import('@deepseek-ai/dsh-agent-preset-registry').PresetDefinition };
+  }
 
   async prepareExecution(
     actor: ActorContext,

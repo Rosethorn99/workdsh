@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import { readFile, readdir, mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { pathToFileURL } from 'node:url';
-export const root=new URL('../',import.meta.url).pathname;
+import { pathToFileURL, fileURLToPath } from 'node:url';
+export const root=fileURLToPath(new URL('../',import.meta.url));
 export async function readOwnedManifests(base=root){
 const directories=['../../packages/bundle','../../packages/contracts','../../packages/ui'];
 for(const group of ['plugins','providers'])for(const entry of await readdir(join(base,'../../packages',group),{withFileTypes:true}))if(entry.isDirectory())directories.push('../../packages/'+group+'/'+entry.name);

@@ -1,3 +1,4 @@
+import type { WorkflowCatalog } from '../workflows/catalog.js';
 import type { Context } from '@deepseek-ai/cordis';
 import type {
   AvailabilityReceipt,
@@ -112,6 +113,10 @@ export function createExpertManagementClient(ctx: Context, lifetime?: AbortSigna
     `expert-web-${action}-${Date.now().toString(36)}-${(sequence++).toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 
   return {
+    workflowAuthoring: <T>(payload: Record<string, unknown>, signal?: AbortSignal) => invoke<T>('workflow-authoring', payload, signal, 60000),
+    listWorkflows: (signal?: AbortSignal) => invoke<WorkflowCatalog>('workflow-list', {}, signal),
+    createWorkflow: (workflowId: string, sessionId: string, workspaceId: string) => invoke<{ sessionId: string }>('workflow-create', { workflowId, sessionId, workspaceId }, undefined, 60000),
+    configureFeishu: (values: Record<string, string>) => invoke<{ saved: true }>('workflow-configure', values),
     listSkills: (expertId: string, scope: 'available' | 'equipped', signal?: AbortSignal) => invoke<readonly ExpertSkillOption[]>('skills', { expertId, scope }, signal),
     newOperationId,
     list: (query: ExpertListQuery = {}, signal?: AbortSignal) => invoke<ExpertListResult>('list', query, signal),

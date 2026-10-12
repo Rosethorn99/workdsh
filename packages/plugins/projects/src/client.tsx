@@ -14,13 +14,25 @@ import type {} from '@deepseek-ai/dsh-api-session-controller/client';
 import type {} from '@deepseek-ai/dsh-api-workspace-controller/client';
 import type { ISessions } from '@deepseek-ai/dsh-api-session-controller/client';
 import type { ProjectInputRef, ProjectSnapshot, ProjectCapabilityRef, ProjectTaskContext } from 'workdsh-contracts/projects';
+import { createProjectConversationNavigation } from './client/project-conversation-navigation.js';
+import type { PropsRenderFactories } from '@deepseek-ai/dsh-client-ui-slots';
 import { createProjectClient } from './client/management.js';
-import { publishProjectFocus, ProjectsPanel } from './client/ProjectsPanel.js';
+import { publishProjectFocus, ProjectsPanel, ProjectsHome } from './client/ProjectsPanel.js';
 import { ProjectConversationMenu, projectApi } from './client/components/project-composer/ProjectConversationMenu.js';
 import type {} from '@deepseek-ai/dsh-client-ui-input-trigger/client';
 import { ProjectLineageChip } from './client/components/project-lineage/ProjectLineageChip.js';
 
 declare module '@deepseek-ai/dsh-api-session-controller/client' { interface SessionReferenceSourceMap { workdshProjectTaskStart: unknown; } }
+
+declare module '@deepseek-ai/dsh-client-ui-slots' { interface SlotMap {
+  'workdsh.project.workflow': {kind:'single';scope:'root';owner:import('workdsh-contracts/projects').ProjectWorkflowOwner};
+  'workdsh.project.conversation': {kind:'single';scope:'session';owner:{}};
+} interface SlotFactoryMap {
+ 'workdsh.project.detail':{scope:'root';children:{'workdsh.project.workflow':{kind:'single';scope:'root'}};inject:Omit<React.ComponentProps<typeof ProjectsPanel>,'renderSlot'|'SessionProvider'|'__renders'>};
+} }
+
+function ProjectDetailHost({renderFactorySlot}:PropsRenderFactories){return renderFactorySlot('workdsh.project.detail',{});}
+
 export const name = 'workdsh-projects-client';
 export const inject = ['slots', 'layout', 'connection', 'sessions', 'workspaces', 'conversation', 'uiWorkspace', 'inputTriggers'];
 
@@ -146,6 +158,34 @@ export function apply(ctx: Context): void {
       inject: () => ({ management, focusProject }),
     }, ProjectLineageChip));
   ctx.slots.inject('sidebar.panellist', () => ctx.slots.register({name:'sidebar.panellist',id:'workdsh-projects',label:'项目',order:20}, () => <Icon name="project" />));
-  ctx.slots.inject('main', () => ctx.slots.register({ name: 'main', key: 'workdsh-projects', inject: () => ({ management, startTask, openTask, focusProject, goHome: () => ctx.layout.selectPanel('workdsh-projects' as Parameters<typeof ctx.layout.selectPanel>[0]) }) }, ProjectsPanel));
-  ctx.slots.inject('main', () => ctx.slots.register({ name: 'main', key: 'workdsh-project-detail', inject: () => ({ management, startTask, openTask, detail: true, focusProject, goHome: () => ctx.layout.selectPanel('workdsh-projects' as Parameters<typeof ctx.layout.selectPanel>[0]) }) }, ProjectsPanel));
+  ctx.slots.inject('main', () => ctx.slots.register({ name: 'main', key: 'workdsh-projects', inject: () => ({ management, startTask, openTask, focusProject, goHome: () => ctx.layout.selectPanel('workdsh-projects' as Parameters<typeof ctx.layout.selectPanel>[0]) }) }, ProjectsHome));
+  // The official right Sidebar recognizes only the reserved Conversation main view.
+  // Reuse one project Factory there while a project task is selected; ordinary Sessions
+  // fall back to the untouched official entry when this temporary contribution leaves.
+  const projectConversation=createProjectConversationNavigation({
+    mount:()=>ctx.slots.register({name:'main',key:'conversation',priority:-30},ProjectDetailHost),
+    writeLocation:value=>{
+      const url=new URL(window.location.href);
+      if(value){url.searchParams.set('project',value.projectId);url.searchParams.set('task',value.taskSessionId);url.searchParams.set('project-conversation',value.conversationId);}
+      else url.searchParams.delete('project-conversation');
+      window.history.replaceState(window.history.state,'',url);
+    },
+    openSession:id=>ctx.uiWorkspace.openSession(sessions.subagentAddress(id as Parameters<ISessions['subagentAddress']>[0])??id as Parameters<ISessions['subagentAddress']>[0]),
+    showConversation:()=>ctx.layout.selectPanel(null),
+  });
+  ctx.effect(()=>{
+    const panel=()=>projectConversation.observePanel(ctx.layout.panelInfo.getSnapshot().activePanelId);
+    const session=()=>projectConversation.observeSession(Object.values(sessions.list.getSnapshot().byId).find(row=>(row.retainedBy.mainView??0)>0)?.id);
+    const stopPanel=ctx.layout.panelInfo.subscribe(panel),stopSession=sessions.list.subscribe(session);
+    return()=>{stopPanel();stopSession();projectConversation.leave();};
+  },'workdsh.projects.conversation-surface');
+  ctx.effect(()=>ctx.slots.registerFactory({name:'workdsh.project.detail',scope:'root',
+    children:{'workdsh.project.workflow':{kind:'single',scope:'root'}},
+    inject:()=>({management,startTask,openTask,detail:true,focusProject,
+      activateConversation:(projectId:string,taskSessionId:string,conversationId:string)=>projectConversation.activate({projectId,taskSessionId,conversationId}),
+      leaveConversation:()=>{if(projectConversation.leave())ctx.layout.selectPanel('workdsh-project-detail' as Parameters<typeof ctx.layout.selectPanel>[0]);},
+      goHome:()=>ctx.layout.selectPanel('workdsh-projects' as Parameters<typeof ctx.layout.selectPanel>[0]),
+    }),
+  },ProjectsPanel));
+  ctx.slots.inject('main',()=>ctx.slots.register({name:'main',key:'workdsh-project-detail'},ProjectDetailHost));
 }

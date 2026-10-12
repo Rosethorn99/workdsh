@@ -1,8 +1,12 @@
+import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client';
+import { WorkflowsPanel, WorkflowNavigationIcon } from './client/WorkflowsPanel.js';
 import type { ComposerHandoff, ComposerHandoffSource } from 'workdsh-contracts/composer';
 declare module '@deepseek-ai/cordis' { interface Events { 'workdsh/composer-handoff'(handoff: ComposerHandoff): Promise<void>; } }
 import type { ActivityPresentation } from 'workdsh-contracts/activity';
 declare module '@deepseek-ai/cordis' { interface Context { activityPresentation: ActivityPresentation; } }
 import { installExpertPresetMenu } from './client/PresetMenu.js';
+import { ConversationWorkflows } from './client/ConversationWorkflows.js';
+import { PROJECT_TASK_FOCUS_EVENT, type ProjectTaskFocus, type ProjectTaskContext } from 'workdsh-contracts/projects';
 import { ConversationExperts } from './client/ConversationExperts.js';
 import { parseDocument } from 'yaml';
 import type { Context } from '@deepseek-ai/cordis';
@@ -16,10 +20,21 @@ import type {} from '@deepseek-ai/dsh-client-ui-renderer/client';
 import type {} from '@deepseek-ai/dsh-client-ui-session/client';
 import type {} from '@deepseek-ai/dsh-client-ui-workspace/client';
 import type {} from '@deepseek-ai/dsh-client-ui-slots';
+import { ProjectWorkflowSurface, ProjectConversationEmbed } from './client/ProjectWorkflowSurface.js';
+import { readManifest } from './workflows/authoring.js';
+import type { WorkflowDetail } from './workflows/authoring.js';
+import type { ProjectInputRef } from 'workdsh-contracts/projects';
 import { ExpertsPanel } from './client/ExpertsPanel.js';
 import { PendingExpertDraft, pendingExpertDraftKey, pendingExpertDraftEvent, expertManagerGuide, expertTeamManagerGuide } from './client/drafts.js';
 import { createExpertManagementClient } from './client/management.js';
 
+
+declare module '@deepseek-ai/dsh-client-ui-slots' { interface SlotMap {
+  'workdsh.project.workflow': {kind:'single';scope:'root';owner:import('workdsh-contracts/projects').ProjectWorkflowOwner};
+  'workdsh.project.conversation': {kind:'single';scope:'session';owner:{}};
+} }
+
+declare module '@deepseek-ai/dsh-api-session-controller/client' {interface SessionReferenceSourceMap {workdshProjectWorkflow:unknown}}
 export const name = 'workdsh-experts-client';
 export const inject = ['slots', 'layout', 'sessions', 'workspaces', 'remote', 'remote.session', 'connection', 'uiWorkspace', 'conversation'];
 
@@ -28,12 +43,13 @@ type SessionId = Awaited<ReturnType<ISessions['create']>>;
 /**
  * Expert Client assembly (D04 / P1-02).
  *
- * Contributes exactly one `main` panel (`workdsh-experts`) and one native-input draft
- * overlay. It deliberately does NOT register a `sidebar.panellist` entry: the shared
+ * Contributes the expert `main` panel and one native-input draft overlay. Expert
+ * management does not add a `sidebar.panellist` entry: the shared
  * capability center ("专家 · 技能 · 连接器") stays a single navigation item owned by the
  * Skill plugin, and the two panels switch through the in-panel capability tabs via
  * `layout.selectPanel`. This keeps AT-20 (no duplicate navigation) and lets the Skill
- * panel keep working when experts is removed.
+ * panel keep working when experts is removed. The seven packaged workflows use a
+ * separate native sidebar entry and paired main panel.
  *
  * Summon creates the bound native Session on the Host (so the expert's compiled preset
  * is attached at creation), then opens it here and seeds a one-shot draft hand-off; the
@@ -182,6 +198,59 @@ export function apply(ctx: Context): void {
     await seedDraft(sessionId, `/workdsh-expert-manager 帮我修改专家：[${name}]，增加/优化[请补充你希望新增/优化的技能或知识领域等]方面的能力`);
   };
 
+  const workflowRequests = new Map<string, string>();
+  const startWorkflow = async (workflowId: string): Promise<void> => {
+    lifetime.signal.throwIfAborted();
+    const workspace = resolveWorkspace();
+    if (!workspace) throw new Error('请先选择或创建工作区，再使用工作流。');
+    const key = workspace.workspaceId + ':' + workflowId;
+    const requestId = workflowRequests.get(key) ?? window.crypto.randomUUID();
+    workflowRequests.set(key, requestId);
+    const created = await management.createWorkflow(workflowId, requestId, String(workspace.workspaceId));
+    await openSession(created.sessionId as SessionId);
+    workflowRequests.delete(key);
+    ctx.layout.selectPanel(null);
+  };
+  const loadWorkflows = (signal: AbortSignal) => management.listWorkflows(signal);
+  const configureWorkflow = (values: Record<string, string>) => management.configureFeishu(values).then(() => undefined);
+  const startAuthoredWorkflow = async (workflowId: string, revisionId?: string, input?: string): Promise<void> => {
+    lifetime.signal.throwIfAborted();
+    const workspace = resolveWorkspace();
+    if (!workspace) throw new Error('请先选择或创建工作区，再使用工作流。');
+    const key = workspace.workspaceId + ':' + workflowId + ':' + (revisionId ?? 'published') + ':' + (input ?? 'manual');
+    const sessionId = workflowRequests.get(key) ?? window.crypto.randomUUID(); workflowRequests.set(key, sessionId);
+    const created = await management.workflowAuthoring<{ sessionId: string }>({ action: 'create', workflowId, revisionId, sessionId,
+      workspaceId: String(workspace.workspaceId), operationId: 'workflow-create-' + sessionId, ...(input===undefined?{}:{automatic:true,input}) });
+    workflowRequests.delete(key);
+    if(input===undefined){await openSession(created.sessionId as SessionId);ctx.layout.selectPanel(null);}
+  };
+  ctx.slots.inject('sidebar.panellist', () => ctx.slots.register({ name: 'sidebar.panellist', id: 'workdsh-workflows', label: '工作流', order: 15 }, WorkflowNavigationIcon));
+  ctx.slots.inject('main', () => ctx.slots.register({ name: 'main', key: 'workdsh-workflows', inject: () => ({ load: loadWorkflows, start: startWorkflow, configure: configureWorkflow, api: management.workflowAuthoring, startAuthored: startAuthoredWorkflow,
+    openSession: async (sessionId: string) => { await openSession(sessionId as SessionId); ctx.layout.selectPanel(null); }, toggleNavigation: () => ctx.layout.toggleSidebar() }) }, WorkflowsPanel));
+
+
+  const retainProjectSession=async(id:string,signal?:AbortSignal)=>{
+    const waitSignal=signal?AbortSignal.any([signal,lifetime.signal]):lifetime.signal;waitSignal.throwIfAborted();
+    await sessions.refresh();waitSignal.throwIfAborted();
+    return sessions.retain(sessions.subagentAddress(id as SessionId)??id as SessionId,{source:'workdshProjectWorkflow',signal:waitSignal});
+  };
+  const startProjectWorkflow=async(projectId:string,workflowId:string,revisionId:string|undefined,input:string|undefined,references:readonly ProjectInputRef[]|undefined):Promise<string>=>{
+    lifetime.signal.throwIfAborted();
+    const response=await fetch('/api/workdsh-projects',{method:'POST',credentials:'same-origin',headers:{'content-type':'application/json'},body:JSON.stringify({endpoint:'ensure-workspace',payload:{projectId}}),signal:lifetime.signal});
+    const envelope=await response.json();if(!response.ok||!envelope.ok)throw new Error(envelope.error?.message??'无法打开项目工作区。');
+    const workspace=envelope.value as {workspaceId:string;path:string};
+    const detail=await management.workflowAuthoring<WorkflowDetail>({action:'get',workflowId,revisionId});
+    const automatic=readManifest(detail.draft.files).mode==='staged'&&Boolean(input?.trim());
+    const key=projectId+':'+workflowId+':'+(revisionId??'published')+':'+(input??'manual');
+    const sessionId=workflowRequests.get(key)??crypto.randomUUID();workflowRequests.set(key,sessionId);
+    const created=await management.workflowAuthoring<{sessionId:string}>({action:'create',workflowId,revisionId,sessionId,workspaceId:String(workspace.workspaceId),projectId,references:references??[],operationId:'project-workflow-create-'+sessionId,...(automatic?{automatic:true,input}: {})});
+    void sessions.refresh().catch(()=>{/* The persisted task is authoritative; opening retains it directly. */});
+    if(input?.trim()&&!automatic){const held=await retainProjectSession(created.sessionId);try{await held.ready;const conversation=held.binding.ctx.get('conversation');if(!conversation)throw new Error('工作流会话已创建，输入尚未就绪；请打开对话发送需求。');await conversation.send(input);}finally{held.release();}}
+    workflowRequests.delete(key);return created.sessionId;
+  };
+  ctx.slots.inject('workdsh.project.conversation',()=>ctx.slots.register({name:'workdsh.project.conversation'},ProjectConversationEmbed));
+  ctx.slots.inject('workdsh.project.workflow',()=>ctx.slots.register({name:'workdsh.project.workflow',children:{'workdsh.project.conversation':{kind:'single',scope:'session'}},inject:()=>({api:management.workflowAuthoring,load:loadWorkflows,start:startProjectWorkflow,retainSession:retainProjectSession})},ProjectWorkflowSurface));
+
   const openCapability = (key: string): void => { ctx.layout.selectPanel(key as Parameters<typeof ctx.layout.selectPanel>[0]); };
   const hasCapability = (key: string): boolean => ctx.slots.entriesOfSlot('main').some(entry => entry.options.key === key);
 
@@ -190,5 +259,15 @@ export function apply(ctx: Context): void {
     inject: () => ({ toggleNavigation: () => ctx.layout.toggleSidebar(), management, openCapability, hasCapability, summon, createExpertTask, editExpertTask }),
   }, ExpertsPanel));
   ctx.slots.inject('conversation.input.overlay', () => ctx.slots.register({ name: 'conversation.input.overlay', id: 'workdsh-expert-draft' }, PendingExpertDraft));
+  const projectTaskContext=async(sessionId:string,signal:AbortSignal):Promise<ProjectTaskContext|null>=>{
+    const response=await fetch('/api/workdsh-projects',{method:'POST',credentials:'same-origin',headers:{'content-type':'application/json'},body:JSON.stringify({endpoint:'task-context',payload:{sessionId}}),signal:AbortSignal.any([signal,lifetime.signal,AbortSignal.timeout(5000)])});
+    const result=await response.json();if(!response.ok||!result.ok)throw new Error(result.error?.message??'无法读取项目任务。');return result.value??null;
+  };
+  const focusProjectTask=(projectId:string,sessionId:string)=>{
+    const url=new URL(window.location.href);url.searchParams.set('project',projectId);url.searchParams.set('task',sessionId);url.searchParams.set('workdsh-view','project-detail');window.history.replaceState(window.history.state,'',url);
+    ctx.layout.selectPanel('workdsh-project-detail' as Parameters<typeof ctx.layout.selectPanel>[0]);
+    window.dispatchEvent(new CustomEvent<ProjectTaskFocus>(PROJECT_TASK_FOCUS_EVENT,{detail:{projectId,sessionId}}));
+  };
+  ctx.slots.inject('conversation.input.left',()=>ctx.slots.register({name:'conversation.input.left',id:'workdsh-project-workflow',order:30,inject:()=>({api:management.workflowAuthoring,readProjectTaskContext:projectTaskContext,startProjectRun:startProjectWorkflow,openProjectTask:focusProjectTask})},ConversationWorkflows));
   ctx.slots.inject('conversation.input.left', () => ctx.slots.register({ name: 'conversation.input.left', id: 'workdsh-summon-expert', order: 25, inject: () => ({ management, summon, openManagement: () => openCapability('workdsh-experts') }) }, ConversationExperts));
 }

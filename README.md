@@ -48,6 +48,23 @@ WorkDSH draws on WorkBuddy's way of organizing projects, material, experts, skil
 - **Mention colleagues and share AI results**: select organization colleagues with `@`, share analysis text and files, and review received or sent shares in Collaboration. Requires the Enterprise Connection plugin and company login.
 - **Personal and company models together**: connect the company model API and select company models in the conversation model picker while retaining personal providers. Supplier keys remain in the admin backend.
 
+
+### Seven ready-to-select workflows
+
+Open **Workflows**, choose a workflow, and click **Use in new session**. It creates a native session in your workspace; enter a request to start. The same expert plugin ships the presets, nine skills and supporting resources to Web and Desktop.
+
+| Workflow | Deliverable | Prerequisites |
+| --- | --- | --- |
+| AI WebApp | A tested Web product | Node.js, package manager, browser |
+| PPT Office | An 8-page interactive HTML deck with four themes | HTML output; does not generate PPTX |
+| Video generation | A 16:9 MP4 and editable project | FFmpeg, ffprobe, HyperFrames and Web Search |
+| Content factory | 1–10 PNG cards | Installed and authenticated Codex CLI for the image bridge |
+| AI report | An offline interactive report from Excel | Python, pandas/openpyxl and browser |
+| Feishu digital employee | Real Feishu tasks and receipts | Configure an app with task permissions and a default open_id |
+| LLM Wiki Producer | A knowledge-base project developed one stage at a time | Development tools; this is a development preset, not a bundled Wiki application |
+
+These workflows are adapted from [Fufan Studio](https://github.com/fufankeji/deepseek-harness-studio) under MIT, with source and component licenses preserved in the package. The Feishu form writes to the official local credential service and never reads saved values back into the page. Creating a session does not run its workflow automatically; success requires actual files, checks or service receipts.
+
 ### Enterprise authentication that independent plugins can reuse
 
 Enterprise Desktop exposes **`workdshEnterprise`** to Host plugins. It reuses the current member login without returning backend tokens, local bridge credentials or passwords. Desktop Main authenticates requests; the backend enforces member and business permissions.

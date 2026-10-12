@@ -1,0 +1,107 @@
+{
+  "repository": "https://github.com/fufankeji/deepseek-harness-studio",
+  "commit": "257d429156a243517a2cafdff777125cd3fb6d54",
+  "license": "MIT",
+  "workflows": [
+    {
+      "id": "workdsh-ai-webapp",
+      "sourceId": "fufan-ai-webapp",
+      "name": "AI WebApp",
+      "role": "AI 产品开发工程师",
+      "description": "使用需求澄清、规格综合、测试驱动开发和浏览器验收完成可运行 Web 产品。",
+      "category": "产品与应用开发",
+      "deliverable": "可运行、可测试的 Web 产品",
+      "requirements": "Node.js、包管理器与浏览器",
+      "skills": [
+        "grill-me",
+        "tdd",
+        "to-spec"
+      ],
+      "order": 10
+    },
+    {
+      "id": "workdsh-ppt-office",
+      "sourceId": "fufan-ppt-office",
+      "name": "PPT Office",
+      "role": "DSH 动效演示导演",
+      "description": "把用户内容整理成 8 页结构，并生成与验收新的单文件动效 HTML。",
+      "category": "办公与演示",
+      "deliverable": "8 页、四主题的离线交互 HTML 演示文稿",
+      "requirements": "输出为 HTML；不生成 PPTX",
+      "skills": [
+        "dsh-motion-deck"
+      ],
+      "order": 11
+    },
+    {
+      "id": "workdsh-video-generation",
+      "sourceId": "fufan-video-generation",
+      "name": "视频生成",
+      "role": "AI 产品视频导演",
+      "description": "从一句话生成产品简报、设计规范、分镜、HyperFrames 源码和经过验收的横屏 MP4。",
+      "category": "视觉与媒体",
+      "deliverable": "16:9 MP4、分镜、研究文档与视频工程",
+      "requirements": "FFmpeg、ffprobe、Node.js、HyperFrames（按 Skill 锁定）、可用 Web Search",
+      "skills": [
+        "product-launch-video"
+      ],
+      "order": 12
+    },
+    {
+      "id": "workdsh-content-factory",
+      "sourceId": "fufan-content-factory",
+      "name": "内容工厂",
+      "role": "DSH AI 内容视觉编辑",
+      "description": "加载图文卡片 Skill，确认风格与结构，再用图像 Plugin 生成并验收 PNG 系列。",
+      "category": "内容生产",
+      "deliverable": "1–10 张风格一致的 PNG 图文卡片",
+      "requirements": "已安装并登录的 Codex CLI（图像桥）",
+      "skills": [
+        "ai-content-images"
+      ],
+      "order": 13
+    },
+    {
+      "id": "workdsh-ai-report",
+      "sourceId": "fufan-ai-report",
+      "name": "AI 报表",
+      "role": "AI 数据叙事分析师",
+      "description": "从任意本地 Excel 剖析数据、选择图表，并生成及验收新的离线交互报告。",
+      "category": "数据分析",
+      "deliverable": "由本地 Excel 生成的离线交互报告",
+      "requirements": "Python、pandas/openpyxl 与浏览器",
+      "skills": [
+        "build-ai-report"
+      ],
+      "order": 14
+    },
+    {
+      "id": "workdsh-feishu-digital-employee",
+      "sourceId": "fufan-feishu-digital-employee",
+      "name": "飞书数字员工",
+      "role": "飞书数字员工",
+      "description": "在 Harness 中直接对话，并通过飞书 MCP 创建真实任务。",
+      "category": "企业协同",
+      "deliverable": "真实飞书任务与操作回执",
+      "requirements": "飞书自建应用、任务权限与默认负责人 open_id",
+      "skills": [
+        "feishu-digital-employee"
+      ],
+      "order": 15
+    },
+    {
+      "id": "workdsh-llm-wiki-producer",
+      "sourceId": "fufan-llm-wiki-producer",
+      "name": "LLM Wiki Producer",
+      "role": "LLM Wiki 全栈工程师",
+      "description": "以标准编码能力为底座、面向企业知识库项目的分阶段开发 Agent；每轮只做点名的一个阶段，先读工作区与 Skills、给任务清单、跑测试/typecheck/build、UI 截图验收，再按四部分汇报等待下一阶段。",
+      "category": "知识库研发",
+      "deliverable": "按阶段验证并交付的企业知识库项目",
+      "requirements": "Node.js、包管理器、浏览器；Wiki 应用需另行开发",
+      "skills": [
+        "find-plugins"
+      ],
+      "order": 16
+    }
+  ]
+}

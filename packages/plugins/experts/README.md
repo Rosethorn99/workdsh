@@ -84,3 +84,13 @@ dsh --profile workdsh
 ### 专家技能扫描配置
 
 `ExpertsManagerOptions.includeDefaultSkillRoots` 为可选启动配置。省略或 true 保留个人版默认项目/用户技能发现；false 生成仅使用受管 Skill 快照及专家包资源的官方 filesystem provider 配置。false 参与不可变 preset 标识及输入摘要，不能复用旧的默认扫描 preset。此配置由服务器装配传入，不从浏览器请求接收。独立目录不等于完整企业执行验收；官方 preset/子 Agent 仍需成员组合验证。
+
+## Studio 七套工作流
+
+本插件内置 AI WebApp、PPT Office、视频生成、内容工厂、AI 报表、飞书数字员工、LLM Wiki Producer。它们通过官方 PresetRegistry 注册，不复制到用户技能目录，也不改变默认 standard 模式；随插件卸载撤销注册，运行中的会话遵守官方 revision 租约。左侧“工作流”与独立 main 页面配对，原生会话仍由 SessionAccess 创建。
+
+资源、脚本、原配置和许可证位于 resources/workflows，来源提交与目录由 catalog.json 记录，适配范围见 NOTICE.md。逐项保留原配置的工具、参数、分组隔离与禁用状态；仅适配官方发布版本更名的接口、平台路径及凭据桥接，不套用通用 standard 工具清单。98 个来源文件全部保持上游原文并记录 SHA-256；三个运行适配独立放在 adapters/，入口映射记录于 source-manifest.json。九个 Skill 正文与原始预设、脚本及模板都不做原地修改。内置工作流作为包资源更新；现有用户专家、技能与项目不迁移、不覆盖。
+
+飞书凭据使用官方 CredentialsProvider，每次 MCP 操作重新解析并仅传给本机子进程；配置 API 只返回保存状态，目录只返回配置是否齐全。MCP 协议由官方 SDK 及 DSH createMcpToolDefinition 处理。企业模式只在员工 Desktop 运行；该工作流不是企业登录或成员授权。PPT 原版交付为 8 页、四主题、离线交互 HTML，独立运行适配修复原生成流程的场景类名、交互与导航问题，用户要求的流程卡片水平对齐作为明确的展示适配记录；图像桥依赖 Codex CLI，视频依赖 FFmpeg/ffprobe/HyperFrames，Wiki 是分阶段研发指南。
+
+共享源码构建与插件归档不代表七套工作流已完成真实模型、付费图像、飞书写入或 Desktop 安装验收。当前验收应分别检查 Preset/Skill/工具组合、隔离安装、页面、新会话和具体外部交付。

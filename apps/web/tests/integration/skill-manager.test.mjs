@@ -163,7 +163,7 @@ test('skill manager reads, conflict-checks, disables, enables and recoverably un
     assert.deepEqual(listed.map(row => [row.name, row.state, row.manageable]), [['sample', 'enabled', true]]);
     const first = await ctx.workdshSkills.detail('sample');
     assert.match(first.document, /FIRST/); assert.deepEqual(first.resources, ['references/guide.md']);
-    const guide = await ctx.workdshSkills.readResource('sample', 'references/guide.md');
+    const guide = await ctx.workdshSkills.readResource('sample', first.resources[0]);
     assert.equal(guide.document, 'guide');
     await assert.rejects(ctx.workdshSkills.writeResource({ name: 'sample', path: 'references/guide.md', document: 'stale', expectedRevision: 'stale' }), /skill\/revision-conflict/);
     await ctx.workdshSkills.writeResource({ name: 'sample', path: 'references/guide.md', document: 'updated guide', expectedRevision: guide.revision });

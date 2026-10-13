@@ -268,7 +268,7 @@ export class SkillManager extends Service implements SkillManagementService {
         description: validation.description ?? '技能文件需要修复',
         whenToUse: frontmatterValue(document, 'when-to-use'),
         modelInvocable: validation.valid, state: validation.valid ? 'enabled' : 'invalid', manageable: true, document,
-        directoryPath: dirname(active.file), revision: digest(document), resources: active.directoryBundle ? await resourceFiles(dirname(active.file)) : [],
+        directoryPath: dirname(active.file), revision: digest(document), resources: active.directoryBundle ? (await resourceFiles(dirname(active.file))).map(path => path.split(sep).join('/')) : [],
         ...(validation.valid ? {} : { diagnostics: validation.diagnostics }),
       };
     }
@@ -280,7 +280,7 @@ export class SkillManager extends Service implements SkillManagementService {
       description: frontmatterValue(document, 'description') ?? '已停用技能',
       whenToUse: frontmatterValue(document, 'when-to-use'),
       modelInvocable: false, state: 'disabled', manageable: true, document,
-      directoryPath: dirname(disabled.file), revision: digest(document), resources: disabled.directoryBundle ? await resourceFiles(dirname(disabled.file)) : [],
+      directoryPath: dirname(disabled.file), revision: digest(document), resources: disabled.directoryBundle ? (await resourceFiles(dirname(disabled.file))).map(path => path.split(sep).join('/')) : [],
     };
   }
 
@@ -425,7 +425,7 @@ export class SkillManager extends Service implements SkillManagementService {
     const description = typeof metadata.description === 'string' ? metadata.description.trim() : undefined;
     if (!name || !skillNamePattern.test(name) || !isSkillName(name)) throw new Error('skill/invalid-name');
     if (!description) throw new Error('skill/description-required');
-    return { name, description, files: inspected.files, totalBytes: inspected.totalBytes };
+    return { name, description, files: inspected.files.map(path => path.split(sep).join('/')), totalBytes: inspected.totalBytes };
   }
 
   async installImport(request: SkillImportRequest, signal?: AbortSignal): Promise<SkillMutationReceipt> {
@@ -631,7 +631,7 @@ export class SkillManager extends Service implements SkillManagementService {
     return {
       name: definition.name, description: definition.description, whenToUse: definition.whenToUse,
       modelInvocable: definition.invocation.modelInvocable, state: 'enabled', manageable: true,
-      document, revision: digest(document), directoryPath: directory, resources: await resourceFiles(directory),
+      document, revision: digest(document), directoryPath: directory, resources: (await resourceFiles(directory)).map(path => path.split(sep).join('/')),
     };
   }
 

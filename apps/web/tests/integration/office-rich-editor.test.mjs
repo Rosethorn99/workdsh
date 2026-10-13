@@ -1,4 +1,5 @@
 import test from "node:test";
+import {fileURLToPath} from "node:url";
 import assert from "node:assert/strict";
 import {build} from "esbuild";
 import {chromium} from "@playwright/test";
@@ -7,7 +8,7 @@ const JSZip=createRequire(new URL("../../../../packages/plugins/office/package.j
 import {mkdir,writeFile} from "node:fs/promises";
 await mkdir('.artifacts/office-rich',{recursive:true});
 const png="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jf1kAAAAASUVORK5CYII=";
-const bundle=await build({stdin:{contents:`export {Editor} from '@tiptap/core';export {documentExtensions} from './extensions.ts';export {editorContent,documentDiff,editorBlocks} from './adapter.ts';export {applyOperations,blockInput,parse} from '../content/model.ts';export {documentDocx} from './docx.ts';export {importDocx} from './import-docx.ts';export {officeCss} from './style.ts';`,resolveDir:new URL('../../../../packages/plugins/office/src/live',import.meta.url).pathname},bundle:true,platform:'browser',format:'iife',globalName:'RichOffice',write:false});
+const bundle=await build({stdin:{contents:`export {Editor} from '@tiptap/core';export {documentExtensions} from './extensions.ts';export {editorContent,documentDiff,editorBlocks} from './adapter.ts';export {applyOperations,blockInput,parse} from '../content/model.ts';export {documentDocx} from './docx.ts';export {importDocx} from './import-docx.ts';export {officeCss} from './style.ts';`,resolveDir:fileURLToPath(new URL('../../../../packages/plugins/office/src/live',import.meta.url))},bundle:true,platform:'browser',format:'iife',globalName:'RichOffice',write:false});
 async function expectList(page){assert.equal(await page.locator('table ul').count(),1);}
 async function withPage(run){const browser=await chromium.launch({headless:true});try{const page=await browser.newPage({viewport:{width:1440,height:1000}});await page.route('https://rich-office.test/**',r=>r.fulfill({contentType:'text/html',body:'<!doctype html><div class="wd-office-live"><div class="wd-office-paper-scroll"><div class="wd-office-paper"><div id="editor"></div></div></div></div>'}));await page.goto('https://rich-office.test/');await page.addScriptTag({content:bundle.outputFiles[0].text});await page.evaluate(()=>{const style=document.createElement('style');style.textContent=RichOffice.officeCss;document.head.append(style);window.e=new RichOffice.Editor({element:document.querySelector('#editor'),extensions:RichOffice.documentExtensions(),content:'<p>门店经营报告</p>',editorProps:{attributes:{class:'wd-office-writing'}}});});await run(page);}finally{await browser.close();}}
 test('Native Tiptap table commands, merge/split, actual column dragging and image resizing persist through the shared reducer',async()=>withPage(async page=>{

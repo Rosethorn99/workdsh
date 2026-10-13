@@ -19,7 +19,7 @@ await build({
   platform: "node",
   format: "esm",
   outfile: output,
-  plugins:[{name:"office-runtime-deps",setup(b){b.onResolve({filter:/^exceljs$/},()=>({path:dependencyRequire(resolve("../../packages/plugins/office/package.json")).resolve("exceljs"),external:true}));}}],
+  plugins:[{name:"office-runtime-deps",setup(b){b.onResolve({filter:/^exceljs$/},()=>({path:pathToFileURL(dependencyRequire(resolve("../../packages/plugins/office/package.json")).resolve("exceljs")).href,external:true}));}}],
 });
 const {
   documentDocx,

@@ -6,7 +6,7 @@ import { build } from "esbuild";
 import { mkdtemp, mkdir, rm, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { pathToFileURL } from "node:url";
+import { pathToFileURL, fileURLToPath } from "node:url";
 import { Context } from "@deepseek-ai/cordis";
 import Storage from "@deepseek-ai/dsh-storage";
 import * as JsonStorage from "@deepseek-ai/dsh-storage-json";
@@ -30,14 +30,14 @@ await build({
     export:"../../packages/plugins/office/src/content/export.ts",
     "native-deck":"../../packages/plugins/office/src/presentation/native-deck.ts",
   },
-  outdir: artifacts.pathname,
+  outdir: fileURLToPath(artifacts),
   bundle: true,
   splitting: true,
   loader:{".ttf":"binary"},
   platform: "node",
   format: "esm",
   external: ["@deepseek-ai/*"],
-  plugins:[{name:"office-runtime-deps",setup(b){b.onResolve({filter:/^exceljs$/},()=>({path:officeRequire.resolve("exceljs"),external:true}));}}],
+  plugins:[{name:"office-runtime-deps",setup(b){b.onResolve({filter:/^exceljs$/},()=>({path:pathToFileURL(officeRequire.resolve("exceljs")).href,external:true}));}}],
 });
 const { ContentService } = await import(new URL("service.js", artifacts));
 const toolPlugin = await import(new URL("tools.js", artifacts));
@@ -742,7 +742,7 @@ test("PPTX import uses Harness fs, preserves package and supports template text 
   const edited=await h.s.read(actor(),first.documentId);
   const result=edited.state.deck.slides.find(s=>s.id===slide.id).elements.find(e=>e.id===element.id);
   assert.equal(result.text,"客户项目实际内容");assert.equal(result.x,element.x);assert.deepEqual(result.textStyle,element.textStyle);
-  const {PptxHandler}=await import(officeRequire.resolve("pptx-viewer-core"));const handler=new PptxHandler();
+  const {PptxHandler}=await import(pathToFileURL(officeRequire.resolve("pptx-viewer-core")).href);const handler=new PptxHandler();
   const loaded=await handler.load(Uint8Array.from(Buffer.from(edited.state.deck.bytes,"base64")).buffer);
   assert.ok(loaded.slides.some(s=>s.elements.some(e=>e.text==="客户项目实际内容")));
   assert.deepEqual(bytes,Buffer.from(template.bytes,"base64"));
@@ -762,7 +762,7 @@ test("Large template browser saves are accepted only for authorized PPT document
   h=await boot(root);
   const {createPresentation}=await import(new URL("native-deck.js",artifacts));
   const template=await createPresentation("标准模板");
-  const JSZip=(await import(officeRequire.resolve("jszip"))).default;
+  const JSZip=(await import(pathToFileURL(officeRequire.resolve("jszip")).href)).default;
   const zip=await JSZip.loadAsync(Buffer.from(template.bytes,"base64"));
   zip.file("customXml/workdsh-padding.bin",Buffer.alloc(2*1024*1024,7));
   const bytes=(await zip.generateAsync({type:"nodebuffer",compression:"STORE"})).toString("base64");
@@ -784,7 +784,7 @@ test("Large template browser saves are accepted only for authorized PPT document
 
 test("Native snapshots stay aligned with committed PPTX after repeated saves",async()=>{
  const {createPresentation,applyPresentation}=await import(new URL("native-deck.js",artifacts));
- const {PptxHandler}=await import(officeRequire.resolve("pptx-viewer-core"));
+ const {PptxHandler}=await import(pathToFileURL(officeRequire.resolve("pptx-viewer-core")).href);
  let deck=await createPresentation("标准模板标题");
  const slide=deck.slides.find(s=>s.elements.some(e=>e.text==="标准模板标题"));
  const element=slide.elements.find(e=>e.text==="标准模板标题");
@@ -823,7 +823,7 @@ test("Authored RGB text survives an inherited theme reference on save",async()=>
 test("Large template PPTX exports through bounded commands without changing package bytes",async()=>{
  const {exportAndPresent}=await import(new URL("export.js",artifacts));
  const {createPresentation}=await import(new URL("native-deck.js",artifacts));
- const {default:JSZip}=await import(officeRequire.resolve("jszip"));
+ const {default:JSZip}=await import(pathToFileURL(officeRequire.resolve("jszip")).href);
  const {execFile}=await import("node:child_process");
  const {promisify}=await import("node:util");
  const {readFile}=await import("node:fs/promises");
@@ -858,7 +858,7 @@ test("Large template PPTX exports through bounded commands without changing pack
 
 test("Template page expansion revives runtime image handles without duplicating backgrounds",async()=>{
  const {createPresentation,importPresentation,applyPresentation}=await import(new URL("native-deck.js",artifacts));
- const {default:JSZip}=await import(officeRequire.resolve("jszip"));
+ const {default:JSZip}=await import(pathToFileURL(officeRequire.resolve("jszip")).href);
  const source=await createPresentation("背景保真");
  const zip=await JSZip.loadAsync(Buffer.from(source.bytes,"base64"));
  const image=Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aP1sAAAAASUVORK5CYII=","base64");

@@ -1,4 +1,5 @@
 import test from 'node:test';
+import {pathToFileURL} from 'node:url';
 import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -10,7 +11,7 @@ import * as StorageDomain from '@deepseek-ai/dsh-storage-domain';
 import Tools from '@deepseek-ai/dsh-tools';
 import { AccessManager, SessionAccessBridge, ToolAccessBridge } from '../../../../packages/plugins/access/dist/index.js';
 import { createRequire } from 'node:module';
-const { ApiSessionNotFound } = await import(createRequire(new URL('../../../../packages/plugins/access/package.json', import.meta.url)).resolve('@deepseek-ai/dsh-api-session-controller'));
+const { ApiSessionNotFound } = await import(pathToFileURL(createRequire(new URL('../../../../packages/plugins/access/package.json', import.meta.url)).resolve('@deepseek-ai/dsh-api-session-controller')).href);
 import { AuditJournal } from '../../../../packages/plugins/audit/dist/index.js';
 
 const membershipDirectory = new Map([

@@ -11,6 +11,8 @@ for(const directory of directories){try{const manifest=JSON.parse(await readFile
 return manifests;
 }
 export const defaults=['workdsh-provider-identity-local','workdsh-provider-browser-session','workdsh-plugin-audit','workdsh-plugin-access','workdsh-plugin-skills','workdsh-plugin-experts','workdsh-plugin-connectors','workdsh-plugin-library','workdsh-bundle'];
+// Library bundles only Office's public tabular module; the Office plugin stays optional.
+const bundledHelpers=new Map([['workdsh-plugin-library:workdsh-plugin-office:devDependencies','workdsh-plugin-office/tabular']]);
 const allowed=new Set([...defaults,'workdsh-contracts','workdsh-ui','workdsh-plugin-workbench']);
 export async function auditDefaultPluginDelivery(){
 const manifests=await readOwnedManifests();
@@ -40,6 +42,12 @@ const visit=name=>{
  // Also inspect build dependencies: bundled Client code can carry workspace-only modules.
  for(const field of ['dependencies','optionalDependencies','peerDependencies','devDependencies'])for(const dependency of Object.keys(row.manifest[field]??{})){
   if(!dependency.startsWith('workdsh-'))continue;
+  const helper=bundledHelpers.get(name+':'+dependency+':'+field);
+  if(helper){
+   assert.ok(manifests.get(dependency)?.manifest.exports?.['./tabular'],'Bundled helper must have a public export: '+helper);
+   edges.push({from:name,to:dependency,field,bundledHelper:helper});
+   continue;
+  }
   assert.ok(allowed.has(dependency),'Default package closure contains an external feature: '+name+' -> '+dependency);
   edges.push({from:name,to:dependency,field});visit(dependency);
  }

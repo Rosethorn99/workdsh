@@ -162,7 +162,12 @@ export async function compileExpertPreset(ctx: Context, input: CompileInput, age
     await writeFile(join(staging, 'workdsh-expert-manifest.json'), JSON.stringify({ inputDigest, compositionDigest }), { flag: 'wx' });
     try { await rename(staging, presetDir); }
     catch (error) {
-      if (!['EEXIST', 'ENOTEMPTY'].includes((error as NodeJS.ErrnoException).code ?? '')) throw error;
+      if (!['EEXIST', 'ENOTEMPTY'].includes((error as NodeJS.ErrnoException).code ?? '')) {
+        // Windows reports an existing destination directory as EPERM.
+        // Reuse only a readable published manifest; real permission failures still propagate.
+        if ((error as NodeJS.ErrnoException).code !== 'EPERM') throw error;
+        try { await readFile(manifestPath); } catch { throw error; }
+      }
       // Another publisher won; validate its immutable result instead of overwriting it.
       return await compileExpertPreset(ctx, input, agentsHome);
     }
@@ -208,7 +213,7 @@ export async function verifyPackageFiles(presetDir: string, files: Readonly<Reco
   }
   for (const [path, asset] of Object.entries(assets)) {
     const target = join(root, path);
-    if (!(await readFile(target)).equals(assetBytes(path, asset)) || asset.executable && ((await lstat(target)).mode & 0o111) === 0) throw new Error('experts/package-drift');
+    if (!(await readFile(target)).equals(assetBytes(path, asset)) || asset.executable && process.platform !== 'win32' && ((await lstat(target)).mode & 0o111) === 0) throw new Error('experts/package-drift');
   }
 }
 

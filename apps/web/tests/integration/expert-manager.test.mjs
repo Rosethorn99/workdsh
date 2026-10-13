@@ -39,7 +39,7 @@ test('authored expert package publishes complete MD and mounts retained bundled 
     const receipt = await h.experts.publish(a, draft.expertId, draft.revision, validation.dependencyLockDigest, proof, { operationId: 'package-publish' });
     const composition = await readExpertPreset(receipt.presetRevisionRef);
     assert.match(composition, /Complete independent Agent Markdown/);
-    assert.match(composition, /expert-package\/skills\/bundled-method/);
+    assert.ok(JSON.parse(composition).plugins.some(plugin => plugin.config?.customSkillDirs?.some(directory => directory.endsWith(join('expert-package','skills','bundled-method')))));
     const published = await h.experts.get(a, draft.expertId);
     assert.deepEqual(published.revision.definition.packageDocuments, files);
     assert.equal(published.readiness, 'ready');
@@ -54,7 +54,8 @@ test('authored expert package publishes complete MD and mounts retained bundled 
     const root = dirname(expertPresetDir(receipt.presetRevisionRef));
     const cli = join(root, receipt.presetRevisionRef, 'expert-package/bin/inspect');
     assert.deepEqual(await readFile(cli), Buffer.from(assets['bin/inspect'].base64, 'base64'));
-    assert.ok((await stat(cli)).mode & 0o111);
+    assert.equal(published.revision.definition.packageAssets['bin/inspect'].executable, true);
+    if (process.platform !== 'win32') assert.ok((await stat(cli)).mode & 0o111);
     const asset = join(root, receipt.presetRevisionRef, 'expert-package/assets/table.bin');
     await writeFile(asset, Buffer.from([0, 255, 2, 7]));
     assert.notEqual((await h.experts.get(a, draft.expertId)).readiness, 'ready');

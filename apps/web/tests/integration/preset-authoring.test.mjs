@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, readFile, rm, mkdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { dirname, join, sep } from 'node:path';
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
 import { Context } from '@deepseek-ai/cordis';
@@ -72,7 +72,7 @@ test('explicit expert homes compile and restore without reading another home or 
     const a=await boot(); const b=await boot();
     const aHome=join(root,'a');const bHome=join(root,'b');
     const compiled=await compileExpertPreset(a,input,aHome);
-    assert.ok(compiled.presetDir.startsWith(aHome+'/'));
+    assert.ok(compiled.presetDir.startsWith(aHome+sep));
     await assert.rejects(readExpertPreset(compiled.presetId,bHome),error=>error.code==='experts/preset-broken');
     const ownB=await compileExpertPreset(b,input,bHome);
     assert.equal(ownB.presetId,compiled.presetId);
